@@ -26,13 +26,16 @@ start_link() ->
 init([]) ->
     {ok, #state{}}.
 
-handle_call(_Request, _From, State) ->
+handle_call(Request, _From, State) ->
+    lager:error("Unexpected call: ~p", [Request]),
     {reply, ignored, State}.
 
-handle_cast(_Msg, State) ->
+handle_cast(Msg, State) ->
+    lager:error("Unexpected cast: ~p", [Msg]),
     {noreply, State}.
 
-handle_info(_Info, State) ->
+handle_info(Info, State) ->
+    lager:error("Unexpected info: ~p", [Info]),
     {noreply, State}.
 
 terminate(_Reason, _State) ->
