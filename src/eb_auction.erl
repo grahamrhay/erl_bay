@@ -12,12 +12,13 @@
 -export([terminate/2]).
 -export([code_change/3]).
 
--record(state, {starting_price, bids=[]}).
--record(bid, {bidder, amount, time}).
+-type user_id() :: integer().
+-type money() :: {integer(), integer()}.
+-record(bid, {bidder :: user_id(), amount :: money(), time :: calendar:datetime(), automatic :: boolean()}).
+-record(state, {starting_price :: money(), bids = [] :: [#bid{}], high_bid :: #bid{}}).
 
 %% API.
 
--type money() :: {integer(), integer()}.
 -spec start_link([money()]) -> {ok, pid()}.
 start_link(StartingPrice) ->
     gen_server:start_link(?MODULE, [StartingPrice], []).
@@ -27,27 +28,35 @@ start_link(StartingPrice) ->
 init([StartingPrice]) ->
     {ok, #state{starting_price = StartingPrice}}.
 
-handle_call({bid, _UserId, Bid}, _From, State) when Bid < State#state.starting_price ->
+handle_call({bid, _UserId, MaxBid}, _From, State) when MaxBid < State#state.starting_price ->
     {reply, bid_too_low, State};
 
-handle_call({bid, UserId, BidAmount}, _From, State) when State#state.bids =:= [] ->
-    Bid = #bid{bidder = UserId, amount = BidAmount, time = calendar:universal_time()},
-    NewState = State#state{bids = [Bid | State#state.bids]},
+handle_call({bid, UserId, MaxBid}, _From, State) when State#state.bids =:= [] ->
+    BidTime = calendar:universal_time(),
+    Bid = #bid{bidder = UserId, amount = State#state.starting_price, time = BidTime, automatic = false},
+    NewState = State#state{bids = [Bid | State#state.bids], high_bid = #bid{bidder = UserId, amount = MaxBid, time = BidTime}},
     {reply, bid_accepted, NewState};
 
-handle_call({bid, UserId, BidAmount}, _From, State) ->
+handle_call({bid, UserId, MaxBid}, _From, State) ->
     CurrentHighBid = hd(State#state.bids),
-    case BidAmount > CurrentHighBid#bid.amount of
+    case CurrentHighBid#bid.bidder =:= UserId of
         true ->
-            Bid = #bid{bidder = UserId, amount = BidAmount, time = calendar:universal_time()},
-            NewState = State#state{bids = [Bid | State#state.bids]},
+            NewState = State#state{high_bid = #bid{bidder = UserId, amount = MaxBid, time = calendar:universal_time()}},
             {reply, bid_accepted, NewState};
         false ->
-            {reply, bid_too_low, State}
+            HighBid = State#state.high_bid,
+            case MaxBid < HighBid#bid.amount of
+                true ->
+                    Bid = #bid{bidder = UserId, amount = MaxBid, time = calendar:universal_time(), automatic = false},
+                    NewState = State#state{bids = [Bid | State#state.bids]},
+                    {reply, bid_accepted, NewState};
+                false ->
+                    {reply, bid_accepted, State}
+            end
     end;
 
 handle_call(list_bids, _From, State) ->
-    {reply, State#state.bids, State};
+    {reply, lists:reverse(State#state.bids), State};
 
 handle_call(Request, _From, State) ->
     lager:error("Unexpected call: ~p", [Request]),
