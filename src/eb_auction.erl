@@ -38,13 +38,12 @@ handle_call({bid, UserId, MaxBid}, _From, State) when State#state.bids =:= [] ->
 
 handle_call({bid, UserId, MaxBid}, _From, State) ->
     CurrentBid = hd(State#state.bids),
-    BidTime = calendar:universal_time(),
     case CurrentBid#bid.bidder =:= UserId of
         true ->
-            NewState = State#state{high_bid = #bid{bidder = UserId, amount = MaxBid, time = BidTime}},
-            {reply, bid_accepted, NewState};
+            update_bid_for_high_bidder(State, UserId, MaxBid);
         false ->
             HighBid = State#state.high_bid,
+            BidTime = calendar:universal_time(),
             case MaxBid =< HighBid#bid.amount of
                 true ->
                     Bid = #bid{bidder = UserId, amount = MaxBid, time = BidTime, automatic = false},
@@ -91,3 +90,7 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+update_bid_for_high_bidder(State, UserId, MaxBid) ->
+    NewState = State#state{high_bid = #bid{bidder = UserId, amount = MaxBid, time = calendar:universal_time()}},
+    {reply, bid_accepted, NewState}.
