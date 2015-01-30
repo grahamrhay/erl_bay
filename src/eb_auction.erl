@@ -84,25 +84,31 @@ handle_valid_new_bid(State, MaxBid, UserId) ->
     BidTime = calendar:universal_time(),
     case MaxBid =< HighBid#bid.amount of
         true ->
-            Bid = #bid{bidder = UserId, amount = MaxBid, time = BidTime, automatic = false},
-            NewAmount = eb_money:add(MaxBid, eb_bid_increments:get(MaxBid)),
-            NewHighBid = case NewAmount < HighBid#bid.amount of
-                true ->
-                    #bid{bidder = HighBid#bid.bidder, amount = NewAmount, time = HighBid#bid.time, automatic = true};
-                false ->
-                    #bid{bidder = HighBid#bid.bidder, amount = HighBid#bid.amount, time = HighBid#bid.time, automatic = false}
-            end,
-            NewState = State#state{bids = [NewHighBid | [Bid | State#state.bids]]},
-            {reply, bid_accepted, NewState};
+            bid_lower_than_or_equal_to_high_bid(State, MaxBid, UserId, BidTime, HighBid);
         false ->
-            Bid = #bid{bidder = HighBid#bid.bidder, amount = HighBid#bid.amount, time = HighBid#bid.time, automatic = false},
-            NewAmount = eb_money:add(HighBid#bid.amount, eb_bid_increments:get(HighBid#bid.amount)),
-            NewHighBid = case NewAmount < MaxBid of
-                true ->
-                    #bid{bidder = UserId, amount = NewAmount, time = BidTime, automatic = true};
-                false ->
-                    #bid{bidder = UserId, amount = MaxBid, time = BidTime, automatic = false}
-            end,
-            NewState = State#state{bids = [NewHighBid | [Bid | State#state.bids]]},
-            {reply, bid_accepted, NewState}
+            bid_higher_than_current_high_bid(State, MaxBid, UserId, BidTime, HighBid)
     end.
+
+bid_lower_than_or_equal_to_high_bid(State, MaxBid, UserId, BidTime, HighBid) ->
+    Bid = #bid{bidder = UserId, amount = MaxBid, time = BidTime, automatic = false},
+    NewAmount = eb_money:add(MaxBid, eb_bid_increments:get(MaxBid)),
+    NewHighBid = case NewAmount < HighBid#bid.amount of
+        true ->
+            #bid{bidder = HighBid#bid.bidder, amount = NewAmount, time = HighBid#bid.time, automatic = true};
+        false ->
+            #bid{bidder = HighBid#bid.bidder, amount = HighBid#bid.amount, time = HighBid#bid.time, automatic = false}
+    end,
+    NewState = State#state{bids = [NewHighBid | [Bid | State#state.bids]]},
+    {reply, bid_accepted, NewState}.
+
+bid_higher_than_current_high_bid(State, MaxBid, UserId, BidTime, HighBid) ->
+    Bid = #bid{bidder = HighBid#bid.bidder, amount = HighBid#bid.amount, time = HighBid#bid.time, automatic = false},
+    NewAmount = eb_money:add(HighBid#bid.amount, eb_bid_increments:get(HighBid#bid.amount)),
+    NewHighBid = case NewAmount < MaxBid of
+        true ->
+            #bid{bidder = UserId, amount = NewAmount, time = BidTime, automatic = true};
+        false ->
+            #bid{bidder = UserId, amount = MaxBid, time = BidTime, automatic = false}
+    end,
+    NewState = State#state{bids = [NewHighBid | [Bid | State#state.bids]]},
+    {reply, bid_accepted, NewState}.
