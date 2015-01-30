@@ -45,6 +45,13 @@ raising_max_bid_does_not_create_bid(Pid) ->
         ?assertMatch(1, length(gen_server:call(Pid, list_bids)))
     end.
 
+bid_lower_than_current_is_rejected(Pid) ->
+    fun() ->
+        bid_accepted = gen_server:call(Pid, {bid, 1, {1, 00}}),
+        bid_accepted = gen_server:call(Pid, {bid, 2, {2, 00}}),
+        ?assertMatch(bid_too_low, gen_server:call(Pid, {bid, 3, {1, 00}}))
+    end.
+
 second_bidder_bids_less_than_first_max_by_more_than_increment(Pid) ->
     fun() ->
         bid_accepted = gen_server:call(Pid, {bid, 1, {1, 60}}),
