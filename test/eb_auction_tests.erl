@@ -8,6 +8,7 @@ gen_server_test_() ->
         fun reject_bid_lower_than_starting_price/1,
         fun first_bid_is_at_starting_price/1,
         fun raising_max_bid_does_not_create_bid/1,
+        fun cannot_lower_bid_once_made/1,
         fun second_bidder_bids_less_than_first_max/1,
         fun second_bidder_bids_less_than_first_max_by_more_than_increment/1,
         fun second_bidder_bids_same_as_first_max/1,
@@ -43,6 +44,12 @@ raising_max_bid_does_not_create_bid(Pid) ->
         bid_accepted = gen_server:call(Pid, {bid, 1, {2, 00}}),
         bid_accepted = gen_server:call(Pid, {bid, 1, {2, 50}}),
         ?assertMatch(1, length(gen_server:call(Pid, list_bids)))
+    end.
+
+cannot_lower_bid_once_made(Pid) ->
+    fun() ->
+        bid_accepted = gen_server:call(Pid, {bid, 1, {2, 00}}),
+        ?assertMatch(bid_too_low, gen_server:call(Pid, {bid, 1, {1, 50}}))
     end.
 
 bid_lower_than_current_is_rejected(Pid) ->

@@ -67,8 +67,14 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 update_bid_for_high_bidder(State, UserId, MaxBid) ->
-    NewState = State#state{high_bid = #bid{bidder = UserId, amount = MaxBid, time = calendar:universal_time()}},
-    {reply, bid_accepted, NewState}.
+    HighBid = State#state.high_bid,
+    case MaxBid > HighBid#bid.amount of
+        true ->
+            NewState = State#state{high_bid = #bid{bidder = UserId, amount = MaxBid, time = calendar:universal_time()}},
+            {reply, bid_accepted, NewState};
+        false ->
+            {reply, bid_too_low, State}
+    end.
 
 handle_new_bid(State, MaxBid, UserId) ->
     CurrentBid = hd(State#state.bids),
