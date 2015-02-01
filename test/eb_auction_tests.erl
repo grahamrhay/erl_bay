@@ -9,6 +9,7 @@ gen_server_test_() ->
         fun first_bid_is_at_starting_price/1,
         fun raising_max_bid_does_not_create_bid/1,
         fun cannot_lower_bid_once_made/1,
+        fun bid_lower_than_current_is_rejected/1,
         fun second_bidder_bids_less_than_first_max/1,
         fun second_bidder_bids_less_than_first_max_by_more_than_increment/1,
         fun second_bidder_bids_same_as_first_max/1,
