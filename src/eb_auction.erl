@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 
 %% API.
--export([start_link/1]).
+-export([start_link/2]).
 
 %% gen_server.
 -export([init/1]).
@@ -18,13 +18,17 @@
 
 %% API.
 
--spec start_link([eb_money:money()]) -> {ok, pid()}.
-start_link(StartingPrice) ->
-    gen_server:start_link(?MODULE, [StartingPrice], []).
+-spec start_link(eb_money:money(), calendar:datetime()) -> {ok, pid()}.
+start_link(StartingPrice, EndTime) ->
+    gen_server:start_link(?MODULE, [StartingPrice, EndTime], []).
 
 %% gen_server.
 
-init([StartingPrice]) ->
+init([StartingPrice, EndTime]) ->
+    lager:info("Bidding begins. Starting price: ~p", [StartingPrice]),
+    TimeRemaining = calculate_time_remaining(EndTime),
+    lager:info("Time remaining: ~p", [TimeRemaining]),
+    _TimerRef = erlang:send_after(TimeRemaining, self(), bidding_ends),
     {ok, #state{starting_price = StartingPrice}}.
 
 handle_call({bid, _UserId, MaxBid}, _From, State) when MaxBid < State#state.starting_price ->
@@ -55,6 +59,17 @@ handle_call(Request, _From, State) ->
 handle_cast(Msg, State) ->
     lager:error("Unexpected cast: ~p", [Msg]),
     {noreply, State}.
+
+handle_info(bidding_ends, State) when State#state.bids =:= [] ->
+    lager:info("Bidding ends", []),
+    lager:info("No winner", []),
+    {stop, normal, State};
+
+handle_info(bidding_ends, State) ->
+    lager:info("Bidding ends", []),
+    WinningBid = hd(State#state.bids),
+    lager:info("Winner: ~p, Bid: ~p", [WinningBid#bid.bidder, WinningBid#bid.amount]),
+    {stop, normal, State};
 
 handle_info(Info, State) ->
     lager:error("Unexpected info: ~p", [Info]),
@@ -113,3 +128,7 @@ update_bid_list(State, LosingBid, WinningBid) ->
     end,
     NewState = State#state{bids = [NewHighBid | [LosingBid | State#state.bids]]},
     {reply, bid_accepted, NewState}.
+
+calculate_time_remaining(EndTime) ->
+    Now = calendar:universal_time(),
+    (calendar:datetime_to_gregorian_seconds(EndTime) - calendar:datetime_to_gregorian_seconds(Now)) * 1000. %% milliseconds!

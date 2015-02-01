@@ -20,7 +20,8 @@ gen_server_test_() ->
 setup() ->
     process_flag(trap_exit, true),
     StartingPrice = {0, 50},
-    {ok, Pid} = eb_auction:start_link(StartingPrice),
+    EndTime = now_plus_7_days(),
+    {ok, Pid} = eb_auction:start_link(StartingPrice, EndTime),
     Pid.
 
 list_of_bids_is_empty_at_start(Pid) ->
@@ -113,3 +114,8 @@ second_bidder_bids_more_than_first_max_plus_increment(Pid) ->
 cleanup(Pid) ->
     exit(Pid, kill), %% brutal kill!
     ?assertEqual(false, is_process_alive(Pid)).
+
+now_plus_7_days() ->
+    Now = calendar:universal_time(),
+    NowInSeconds = calendar:datetime_to_gregorian_seconds(Now),
+    calendar:gregorian_seconds_to_datetime(NowInSeconds + (60 * 60 * 24 * 7)).
