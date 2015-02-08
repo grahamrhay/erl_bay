@@ -2,8 +2,8 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-gen_server_test_() ->
-    {foreach, fun setup/0, fun cleanup/1, [
+no_reserve_test_() ->
+    {foreach, fun setup_no_reserve/0, fun cleanup/1, [
         fun list_of_bids_is_empty_at_start/1,
         fun reject_bid_lower_than_starting_price/1,
         fun first_bid_is_at_starting_price/1,
@@ -17,11 +17,29 @@ gen_server_test_() ->
         fun second_bidder_bids_more_than_first_max_plus_increment/1
     ]}.
 
-setup() ->
+reserve_price_test_() ->
+    {foreach, fun setup_with_reserve/0, fun cleanup/1, [
+        fun reserve_price_not_met_at_start/1,
+        fun first_bid_is_less_than_reserve/1,
+        fun first_bid_is_more_than_reserve/1,
+        fun second_bid_is_still_less_than_reserve/1,
+        fun raise_max_bid_over_reserve/1,
+        fun second_bid_is_more_than_reserve/1
+    ]}.
+
+setup_no_reserve() ->
     process_flag(trap_exit, true),
     StartingPrice = {0, 50},
     EndTime = now_plus_7_days(),
-    {ok, Pid} = eb_auction:start_link(StartingPrice, EndTime),
+    {ok, Pid} = eb_auction:start_link(StartingPrice, EndTime, undefined),
+    Pid.
+
+setup_with_reserve() ->
+    process_flag(trap_exit, true),
+    StartingPrice = {0, 50},
+    EndTime = now_plus_7_days(),
+    ReservePrice = {100, 0},
+    {ok, Pid} = eb_auction:start_link(StartingPrice, EndTime, ReservePrice),
     Pid.
 
 list_of_bids_is_empty_at_start(Pid) ->
@@ -119,3 +137,54 @@ now_plus_7_days() ->
     Now = calendar:universal_time(),
     NowInSeconds = calendar:datetime_to_gregorian_seconds(Now),
     calendar:gregorian_seconds_to_datetime(NowInSeconds + (60 * 60 * 24 * 7)).
+
+reserve_price_not_met_at_start(Pid) ->
+    fun() ->
+        ?assertEqual(false, gen_server:call(Pid, reserve_met))
+    end.
+
+first_bid_is_less_than_reserve(Pid) ->
+    fun() ->
+        bid_accepted = gen_server:call(Pid, {bid, 1, {50, 0}}),
+        ?assertEqual(false, gen_server:call(Pid, reserve_met)),
+        [Bid] = gen_server:call(Pid, list_bids),
+        ?assertMatch({bid, 1, {50, 0}, _Time, false}, Bid)
+    end.
+
+first_bid_is_more_than_reserve(Pid) ->
+    fun() ->
+        bid_accepted = gen_server:call(Pid, {bid, 1, {101, 0}}),
+        ?assertEqual(true, gen_server:call(Pid, reserve_met)),
+        [Bid] = gen_server:call(Pid, list_bids),
+        ?assertMatch({bid, 1, {100, 0}, _Time, false}, Bid)
+    end.
+
+second_bid_is_still_less_than_reserve(Pid) ->
+    fun() ->
+        bid_accepted = gen_server:call(Pid, {bid, 1, {50, 0}}),
+        bid_accepted = gen_server:call(Pid, {bid, 1, {75, 0}}),
+        ?assertEqual(false, gen_server:call(Pid, reserve_met)),
+        Bids = gen_server:call(Pid, list_bids),
+        ?assertEqual(2, length(Bids)),
+        ?assertMatch({bid, 1, {75, 0}, _Time, false}, lists:nth(2, Bids))
+    end.
+
+raise_max_bid_over_reserve(Pid) ->
+    fun() ->
+        bid_accepted = gen_server:call(Pid, {bid, 1, {50, 0}}),
+        bid_accepted = gen_server:call(Pid, {bid, 1, {101, 0}}),
+        ?assertEqual(true, gen_server:call(Pid, reserve_met)),
+        Bids = gen_server:call(Pid, list_bids),
+        ?assertEqual(2, length(Bids)),
+        ?assertMatch({bid, 1, {100, 0}, _Time, false}, lists:nth(2, Bids))
+    end.
+
+second_bid_is_more_than_reserve(Pid) ->
+    fun() ->
+        bid_accepted = gen_server:call(Pid, {bid, 1, {50, 0}}),
+        bid_accepted = gen_server:call(Pid, {bid, 2, {101, 0}}),
+        ?assertEqual(true, gen_server:call(Pid, reserve_met)),
+        Bids = gen_server:call(Pid, list_bids),
+        ?assertEqual(2, length(Bids)),
+        ?assertMatch({bid, 2, {100, 0}, _Time, false}, lists:nth(2, Bids))
+    end.
